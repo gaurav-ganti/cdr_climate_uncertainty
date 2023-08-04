@@ -3,7 +3,7 @@ import pyam
 import numpy as np
 
 def _cross_threshold(x):
-    y = pyam.cross_thresholds(
+    y = pyam.cross_threshold(
         x,
         threshold=0.1
     )
