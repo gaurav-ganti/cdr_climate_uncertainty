@@ -1,0 +1,26 @@
+name: cdr_climate_uncertainty
+channels:
+  - conda-forge
+  - default
+dependencies:
+  - python=3.10
+  - pip>19
+  - ipywidgets
+  - nb_black
+  - nbdime
+  - netcdf4
+  - matplotlib>=3.3
+  - pooch
+  - pymagicc
+  - pytest
+  - seaborn
+  - scmdata>=0.11
+  - scikit-learn
+  - tqdm
+  - pip:
+      - climate-assessment
+      - nbresuse
+      - openscm-runner
+      - openscm-zenodo
+      - papermill
+      - pyrcmip
