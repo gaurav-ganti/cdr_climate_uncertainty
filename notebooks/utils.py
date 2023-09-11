@@ -17,6 +17,44 @@ def calculate_netzero(_df):
         axis=1
     )
 
+def strip_nz_suffix(df, return_as_ts=True):
+    """
+    Function to strip out the _NZCO2 suffix
+    """
+    if isinstance(df, pyam.IamDataFrame):
+        df_ts = (
+            df
+            .timeseries()
+            .reset_index()
+        )
+    else:
+        if 'scenario' not in df.columns:
+            if 'scenario' in df.index:
+                df_ts = df.reset_index()
+            else:
+                raise ValueError('scenario column not in data')
+        else:
+            df_ts = df
+    # Now proceed to strip out _NZCO2
+    df_ts.loc[:,'scenario'] = (
+        df_ts
+        .loc[:,'scenario']
+        .apply(
+            lambda x: x.replace(
+                '_NZCO2',
+                ''
+            )
+        )
+    )
+    # Now return this
+    if return_as_ts:
+        df_return = df_ts
+    else:
+        df_return = pyam.IamDataFrame(
+            df_ts
+        )
+    return df_return
+
 def assign_warming_levels(df, assign_peak_year=False, include_2015=False):
     """
     Function to append peak and 2100
