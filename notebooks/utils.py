@@ -17,7 +17,7 @@ def calculate_netzero(_df):
         axis=1
     )
 
-def assign_peak_and_2100_warming(df, assign_peak_year=False, include_2015=False):
+def assign_warming_levels(df, assign_peak_year=False, include_2015=False):
     """
     Function to append peak and 2100
     warming for a given dataframe
