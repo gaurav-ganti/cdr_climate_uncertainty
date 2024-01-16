@@ -8,6 +8,8 @@ import numpy as np
 import yaml
 from pathlib import Path
 
+from scipy.optimize import minimize_scalar
+
 def compile_novel_cdr_estimates(db, dimensions):
     """
     Compiles novel CDR estimates from a given database.
@@ -51,6 +53,69 @@ def compile_novel_cdr_estimates(db, dimensions):
     )
     # Step 3: Return the processed data
     return db_novel_aggregated
+
+def construct_new_cdr_pathway(
+        cdr_base, lookup, model,
+        scenario, ensemble_member
+):
+    # Step 1: Filter the lookup table for the given pathway and ensemble member
+    lookup_filtered = lookup.loc[
+        (model, scenario, ensemble_member),:
+    ]
+    # Step 2: Filter cdr_base for the given pathway
+    novel_cdr = (
+        cdr_base
+        .filter(
+            model=model,
+            scenario=scenario
+        )
+    )
+    # Step 3: Assign the year of net zero CO2 to the pathway
+    novel_cdr.set_meta(
+        name='netzero|CO2',
+        meta=lookup_filtered['netzero|CO2']
+    )
+    # Step 4: Calculate the necessary cumulative CDR
+    required_cumulative = (
+        (
+            novel_cdr
+            .timeseries()
+            .apply(
+                lambda x: pyam.cumulative(
+                    x,
+                    first_year=lookup_filtered['netzero|CO2'],
+                    last_year=2100
+                ),
+                axis=1
+            ) / 1000
+        ).values[0]
+        + 
+        lookup_filtered['additional_cdr_gtco2_first_guess']
+    )
+    # Step 5: Calculate the optimal angle for this pathway to meet the desired cumulative outcome
+    def objective(angle):
+        pathway, cumulative = rotate_and_calc_cumulative(novel_cdr, angle)
+        return abs(
+            (cumulative/1e3 - required_cumulative)
+            .values[0]
+        )
+    result = minimize_scalar(
+        objective,
+        bounds=(0, 90),
+        method='bounded'
+    )
+    # Step 6: Return the rotated pathway with the ensemble member assigned as a meta column
+    pathway, cumulative_return = rotate_and_calc_cumulative(novel_cdr, result.x)
+    # Step 7: Assign the ensemble member as a column
+    pathway_return = pyam.IamDataFrame(
+        pathway
+        .timeseries()
+        .reset_index()
+        .assign(
+            ensemble_member=ensemble_member
+        )
+    )
+    return pathway_return
 
 def rotate_and_calc_cumulative(scen_data, angle):
     """
