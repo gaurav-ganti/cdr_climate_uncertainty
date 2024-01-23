@@ -163,3 +163,4 @@ cython_debug/
 magicc*/
 data/
 scratch/
+notebooks/results/*.csv
