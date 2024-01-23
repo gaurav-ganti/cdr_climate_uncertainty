@@ -162,3 +162,5 @@ cython_debug/
 # Folders to ignore
 magicc*/
 data/
+scratch/
+notebooks/results/*.csv

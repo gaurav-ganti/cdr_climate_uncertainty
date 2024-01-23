@@ -1,0 +1,5 @@
+novel_cdr_vars:
+- 'Carbon Sequestration|Direct Air Capture'
+- 'Carbon Sequestration|Enhanced Weathering'
+- 'Carbon Sequestration|CCS|Biomass'
+netzero_column: 'netzero|CO2'
