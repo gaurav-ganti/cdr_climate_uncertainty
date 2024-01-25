@@ -18,6 +18,6 @@ do
     echo "Running iterations for ${model} ${scenario}"
     for i in $(seq 0 $END) 
     do
-        papermill 403_iterate_for_cdr.ipynb -p ENSEMBLE_MEMBER ${i} -p MODEL "$model" -p SCENARIO "$scenario" papermill_output/"403_${i}_$model_$scenario.ipynb"
+        papermill 403_iterate_for_cdr.ipynb -p ENSEMBLE_MEMBER $i -p MODEL "$model" -p SCENARIO "$scenario" papermill_output/"403_${i}_${model}_${scenario}.ipynb"
     done
 done < ../data/100_scenario_names.csv
