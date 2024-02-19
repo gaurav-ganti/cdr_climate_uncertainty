@@ -7,6 +7,9 @@ def grab_results(ensemble_members, model, scenario, result_path):
     """
     Function to grab results
     """
+    failed_runs = []
+    if '/' in model:
+        model=model.replace('/', '-')
     cdr_string_type=f"CDR_{model}_{scenario}"
     temp_string_type=f"TEMP_{model}_{scenario}"
     cdr_dfs=[]
@@ -29,6 +32,7 @@ def grab_results(ensemble_members, model, scenario, result_path):
             )
         except:
             print(i)
+            failed_runs.append((i, model, scenario))
     cdr_final=pyam.concat(cdr_dfs)
     temp_final=pyam.concat(temp_dfs)
-    return cdr_final, temp_final
+    return cdr_final, temp_final, failed_runs
