@@ -2,6 +2,9 @@
 import pyam
 import numpy as np
 import scmdata
+import sys
+sys.path.append('../scripts')
+from cdr import construct_new_cdr_pathway
 
 def _cross_threshold(x):
     y = pyam.cross_threshold(
@@ -125,3 +128,9 @@ def _prep_df_for_subtract(df,cols=None):
         return df.loc[:,cols]
     else:
         return df
+
+def process_cdr_pathway(novel_cdr_compiled, metrics_first_guess, model, scenario, ensemble_member):
+    try:
+        return construct_new_cdr_pathway(novel_cdr_compiled, metrics_first_guess, model, scenario, ensemble_member)
+    except:
+        print(model, scenario)
