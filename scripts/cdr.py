@@ -154,7 +154,7 @@ def rotate_and_calc_cumulative(scen_data, angle):
         scen_pyam
         .timeseries()
         .apply(
-            lambda x: pyam.cumulative(
+            lambda x: pyam.timeseries.cumulative(
                 x,
                 first_year=nz_year,
                 last_year=2100
