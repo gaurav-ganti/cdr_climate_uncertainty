@@ -85,7 +85,7 @@ def parallel_process(conf_batch, n_jobs=16, front_num=3):
             out.append(future.result())
         except Exception as e:
             out.append(e)
-    pool.shutdown()
+    #pool.shutdown()
     return front + out
 def grab_results_all(model_scens):
     temp = []
@@ -167,7 +167,7 @@ if __name__=="__main__":
             }
             for x in fail
         ]
-        parallel_process(fail_as_config, n_jobs=6, front_num=3)
+        parallel_process(fail_as_config, n_jobs=20, front_num=5)
         time.sleep(2)
         cdr, temp, fail = grab_results_all(scen_names )
     logger.info('Writing results to file')
