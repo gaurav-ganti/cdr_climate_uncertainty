@@ -136,19 +136,18 @@ def process_cdr_pathway(novel_cdr_compiled, metrics_first_guess, model, scenario
         print(model, scenario)
 
 def rebase_temperatures_wg3(raw_temp):
+    offset = np.load('../data/magicc_number.npy')
     temp_rebased_init = (
         raw_temp
         .filter(region='World')
         .relative_to_ref_period_mean(
             year=range(1850,1901)
         )
-        .drop_meta(["reference_period_start_year", "reference_period_end_year"])
+        + offset
     )
-    temp_rebased_final = (
-        temp_rebased_init.adjust_median_to_target(
-            0.85,
-            range(1995, 2015),
-            process_over=("run_id",),
-        )
+    temp_rebased_final = scmdata.ScmRun(
+        temp_rebased_init
+        +
+        factor
     )
     return temp_rebased_final
