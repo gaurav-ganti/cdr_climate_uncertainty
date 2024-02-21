@@ -14,6 +14,22 @@ from tqdm import tqdm
 from itertools import islice
 import concurrent.futures
 
+# Deal with logging
+import logging
+import datetime
+logger = logging.getLogger(__name__)
+
+# Properties of the logging file
+current_datetime = (
+    datetime
+    .datetime
+    .now()
+    .strftime('%Y-%m-%d_%H-%M')
+)   
+
+fh = logging.FileHandler(f'logging/{current_datetime}_404_runs.log')
+logger.addHandler(fh)
+
 # Deal with the paths and load the environment file
 dotenv.load_dotenv()
 os.environ['MAGICC_WORKER_NUMBER']='1'
@@ -22,6 +38,9 @@ OUTPUT_PATH=os.environ['OUTPUT_PATH']
 
 # Construct and batch the configuration files
 def construct_and_batch_configs(mod_scens, batch_size):
+    logger.info(
+        f'Step 1: Constructing and batching {len(mod_scens)} configs with batch size {batch_size}'
+    )
     configs=[]
     for row, value in mod_scens.iterrows():
         for i in range(0, int(sys.argv[1])):
@@ -102,6 +121,8 @@ def grab_results_all(model_scens):
     return cdr_compiled, temp_compiled, fail
 
 if __name__=="__main__":
+    start_time = datetime.datetime.now().isoformat()
+    logger.info(f'Starting runs at: {start_time}')
     mod_scens=pd.read_csv(
         pathlib.Path(
             "../data/100_scenario_names.csv"
@@ -109,8 +130,13 @@ if __name__=="__main__":
         header=None
     )
     confs=construct_and_batch_configs(mod_scens, int(sys.argv[2]))
+    logger.info('Config batching successful')
+    counter = 1
     for conf in tqdm(confs):
+        logger.info(f'Running batch no: {counter}')
         parallel_process(conf, n_jobs=int(sys.argv[3]), front_num=3)
+        counter += 1
+    logger.info('First runs complete')
     time.sleep(2)
     scen_names = pd.read_csv(
         pathlib.Path(
@@ -121,8 +147,18 @@ if __name__=="__main__":
     cdr, temp, fail = grab_results_all(
         scen_names    
     )
+    first_runs_finish = datetime.datetime.now().isoformat()
+    logger.info(f'First runs finished at: {first_runs_finish}')
+    logger.info(f'{len(fail)} failed to run')
+
+    # Decide how many re runs we want
+    re_run_max = 10
+    re_run_counter = 1
     while len(fail) > 0:
-        print(len(fail))
+        if re_run_counter > re_run_max:
+            logger.info(f'Exceeded maximum number of re-runs: {re_run_max}')
+            break
+        logger.info(f'Starting re-run number: {re_run_counter} for {len(fail)} failed runs')
         fail_as_config = [
             {
                 'ENSEMBLE_MEMBER':x[0],
@@ -134,5 +170,8 @@ if __name__=="__main__":
         parallel_process(fail_as_config, n_jobs=6, front_num=3)
         time.sleep(2)
         cdr, temp, fail = grab_results_all(scen_names )
+    logger.info('Writing results to file')
     cdr.to_csv('../data/404_cdr.csv')
     temp.to_csv('../data/404_temp.csv')
+    complete_time = datetime.datetime.now().isoformat()
+    logger.info(f'Runs complete at: {complete_time}')
