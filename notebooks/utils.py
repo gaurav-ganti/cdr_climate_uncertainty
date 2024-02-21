@@ -136,7 +136,7 @@ def process_cdr_pathway(novel_cdr_compiled, metrics_first_guess, model, scenario
         print(model, scenario)
 
 def rebase_temperatures_wg3(raw_temp):
-    factor = np.load('../data/magicc_number.npy')
+    offset = np.load('../data/magicc_number.npy')
     temp_rebased_init = (
         raw_temp
         .filter(region='World')
