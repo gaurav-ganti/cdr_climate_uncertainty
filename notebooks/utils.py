@@ -143,7 +143,7 @@ def rebase_temperatures_wg3(raw_temp):
         .relative_to_ref_period_mean(
             year=range(1850,1901)
         )
-        .timeseries()
+        + offset
     )
     temp_rebased_final = scmdata.ScmRun(
         temp_rebased_init
