@@ -166,3 +166,5 @@ scratch/
 notebooks/results/*.csv
 notebooks/papermill_output/*.ipynb
 notebooks/logging/*.log
+.Rproj.user
+fairshares/.Rhistory
