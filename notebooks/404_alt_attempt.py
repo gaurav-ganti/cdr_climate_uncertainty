@@ -17,6 +17,7 @@ import concurrent.futures
 # Deal with logging
 import logging
 import datetime
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Properties of the logging file
@@ -28,6 +29,7 @@ current_datetime = (
 )   
 
 fh = logging.FileHandler(f'logging/{current_datetime}_404_runs.log')
+#fh.setLevel(logging.INFO)
 logger.addHandler(fh)
 
 # Deal with the paths and load the environment file
@@ -86,7 +88,9 @@ def parallel_process(conf_batch, n_jobs=16, front_num=3):
         except Exception as e:
             out.append(e)
     #pool.shutdown()
-    return front + out
+    #return front + out
+
+
 def grab_results_all(model_scens):
     temp = []
     cdr = []
@@ -106,10 +110,15 @@ def grab_results_all(model_scens):
     temp_compiled = pyam.concat(temp)
     cdr_compiled = pyam.concat(cdr)
     temp_compiled.swap_time_for_year(inplace=True)
+    #failed_to_hit_1p5 = temp_compiled.validate(
+    #    upper_bound=1.55,
+    #    year=2100,
+    #    exclude_on_fail=True
+    #)
     failed_to_hit_1p5 = temp_compiled.validate(
-        upper_bound=1.55,
-        year=2100,
-        exclude_on_fail=True
+        criteria={
+            temp_compiled.variable[0]:{'up': 1.55, 'year':2100}
+        }
     )
     try:
         for index, row in failed_to_hit_1p5.iterrows():
@@ -153,12 +162,12 @@ if __name__=="__main__":
 
     # Decide how many re runs we want
     re_run_max = 10
-    re_run_counter = 1
+    re_run_counter = 0
     while len(fail) > 0:
+        re_run_counter = re_run_counter + 1
         if re_run_counter > re_run_max:
-            logger.info(f'Exceeded maximum number of re-runs: {re_run_max}')
+            logger.info(f'Exceeded maximum number of re-runs: {re_run_counter}')
             break
-        logger.info(f'Starting re-run number: {re_run_counter} for {len(fail)} failed runs')
         fail_as_config = [
             {
                 'ENSEMBLE_MEMBER':x[0],
@@ -167,9 +176,10 @@ if __name__=="__main__":
             }
             for x in fail
         ]
-        parallel_process(fail_as_config, n_jobs=20, front_num=5)
-        time.sleep(2)
-        cdr, temp, fail = grab_results_all(scen_names )
+        logger.info(f'Starting re-run number: {re_run_counter} for {len(fail)} failed runs')
+        parallel_process(fail_as_config, n_jobs=int(sys.argv[3]), front_num=0)
+        time.sleep(1)
+        cdr, temp, fail = grab_results_all(scen_names)
     logger.info('Writing results to file')
     cdr.to_csv('../data/404_cdr.csv')
     temp.to_csv('../data/404_temp.csv')
