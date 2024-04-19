@@ -1,4 +1,4 @@
-# Replication archive for: "Delaying Carbon Debt Drawdown Fails Younger Generations"
+# Replication archive for: ""
 
 # Contact for clarifications: [ANONYMISED]       
 
@@ -19,18 +19,22 @@ p_load(here, countrycode, zoo)
 # options
 options(scipen = 999)
 
+# knitr options
+#' ```{r setup, include=FALSE}
+#' knitr::opts_chunk$set(echo = TRUE, fig.width=12, fig.height=6)
+#' ```
+
 # COUNTRY NAMES AND REGIONAL GROUPING ------------------------------------------
 
 # Determine country-years for analysis
-iso3c_tbl <- read_csv(here("Data", "countrygroups", "iso3c_region_mapping.csv")) %>% 
-  select(country.name, iso3c, r10 = iamc_r10) %>% 
-  group_by(country.name, iso3c, r10) %>% 
-  expand(year = 1850:2050) %>% 
+iso3c_tbl <- read_csv(here("Data", "countrygroups", "region_mapping_REMIND.csv")) %>% 
+  select(iso3c = ISO, r10 = R10_REMIND_2.1.REGION) %>% 
+  group_by(iso3c, r10) %>% 
+  expand(year = 1850:2100) %>% 
   ungroup()
 
 # Set consistent r10 ordering
-r10order <- tibble(r10 = c("NAM", "EUR", "PAO", "FSU", "MEA", "EAS", "LAM", "PAS", "AFR", "SAS"),
-                   r10label = c("R10NORTH_AM", "R10EUROPE", "R10PAC_OECD", "R10REF_ECON", "R10MIDDLE_EAST", "R10CHINA+", "R10LATIN_AM", "R10REST_ASIA", "R10AFRICA", "R10INDIA+"),
+r10order <- tibble(r10 = c("R10NORTH_AM", "R10EUROPE", "R10PAC_OECD", "R10REF_ECON", "R10MIDDLE_EAST", "R10CHINA+", "R10LATIN_AM", "R10REST_ASIA", "R10AFRICA", "R10INDIA+"),
                    r10labellong = c("North America", "Europe", "Asia-Pacific Developed",
                                     "Eastern Europe and West-Central Asia", "Middle East", "Eastern Asia",
                                     "Latin America and Caribbean", "South-East Asia and developing Pacific",
@@ -39,7 +43,7 @@ r10order <- tibble(r10 = c("NAM", "EUR", "PAO", "FSU", "MEA", "EAS", "LAM", "PAS
 # Adjust labels to reflect those for publication
 iso3c_tbl <- iso3c_tbl %>% 
   left_join(r10order) %>% 
-  select(country.name, iso3c, r10, r10label, r10labellong, year)
+  select(iso3c, r10, r10labellong, year)
 
 # PROCESSED DATA ---------------------------------------------------------------
 
@@ -49,72 +53,143 @@ r10_rcb19902020 <- read_csv(here("data", "equity_data", "processed", "r10_rcb199
 
 # SCENARIO DATA ----------------------------------------------------------------
 
-co2ffi_paths <- read_csv(here("data", "pathways", "305_equity_input.csv")) %>% 
-  filter(Variable != "Population") %>% 
-  pivot_longer(cols = matches("\\d{4}"), names_to = "year", values_to = "gtco2_path") %>%
-  mutate(gtco2_path = gtco2_path / 10^3,
-         year = as.numeric(year)) %>% 
-  filter(year >= 2025) %>% 
-  select(model = Model, scen = Scenario, r10 = Region, year, gtco2_path)
+# Read in regional CO2-FFI and Novel CDR emissions paths
+paths <- read_csv(here("data", "pathways", "406_compiled_equity_data.csv")) %>% 
+  filter(Variable %in% c("Emissions|CO2|Energy and Industrial Processes", 
+                         "Carbon Dioxide Removal|Novel")) %>%
+  select(-Unit) %>% 
+  pivot_longer(cols = matches("\\d{4}"), names_to = "Year", values_to = "Value") %>% 
+  pivot_wider(names_from = "Variable", values_from = "Value") %>% 
+  mutate("Emissions|CO2|Energy and Industrial Processes|Gross" = 
+           `Emissions|CO2|Energy and Industrial Processes` +
+           `Carbon Dioxide Removal|Novel`,
+         Year = as.numeric(Year)) %>%
+  # Change units to GtCo2
+  mutate(across(-c(Model, Scenario, Region, Year), ~. / 1e3)) %>% 
+  filter(Year > 2020)
 
-novelcdr_paths <- read_csv(here("data", "pathways", "404_cdr.csv")) %>% 
-  pivot_longer(cols = matches("\\d{4}"), names_to = "year", values_to = "gtcdr") %>% 
-  mutate(gtcdr = gtcdr / 10^3,
-         year = as.numeric(year)) %>% 
-  filter(year >= 2025) %>% 
-  select(model = Model, scen = Scenario, angle = Angle, ensemble_member = Ensemble_Member, year, gtcdr)
+# Read in global P90 CDR paths and SUBTRACT FROM THESE global NOVEL CDR
+p90cdr <- read_csv(here("data", "pathways", "406_compiled_equity_data.csv")) %>% 
+  filter(Variable %in% c("Carbon Dioxide Removal|Novel [p90]", "Carbon Dioxide Removal|Novel"),
+         Region == "World") %>%
+  select(-Unit) %>% 
+  pivot_longer(cols = matches("\\d{4}"), names_to = "Year", values_to = "Value") %>% 
+  pivot_wider(names_from = "Variable", values_from = "Value") %>% 
+  mutate(Year = as.numeric(Year),
+         `Carbon Dioxide Removal|Novel [p90]|Additional` = `Carbon Dioxide Removal|Novel [p90]` - `Carbon Dioxide Removal|Novel`) %>%
+  # Change units to GtCo2
+  mutate(across(-c(Model, Scenario, Region, Year), ~. / 1e3)) %>% 
+  filter(Year > 2020)
+
+p90cdr %>% 
+  pivot_longer(-c(Model, Scenario, Region, Year)) %>% 
+  ggplot(aes(x = Year, y = value, colour = name)) +
+  geom_line() +
+  facet_wrap(~Scenario, ncol = 5) +
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  labs(x = NULL, y = "GtCO2", colour = NULL,
+       title = "Novel CDR pathways, P90 CDR pathways, and difference (additional P90 CDR)")
 
 # COMBINE HISTORICAL AND MODELLED EMISSIONS PATHWAYS ---------------------------
 
-co2ffi_paths_hist <- list(co2ffi_paths %>%  mutate(category = "1_PP1990"),
-                          co2ffi_paths %>% mutate(category = "2_PP1850")) %>% 
+co2ffi_paths_hist <- list(paths %>%  mutate(Category = "1_PP1990"),
+                          paths %>% mutate(Category = "2_PP1850")) %>% 
   reduce(bind_rows) %>% 
-  # To discuss how to address novel CDR / emissions in this catchall region
-  filter(r10 != "R10ROWO") %>% 
-  group_by(model, scen, r10, category) %>% 
-  complete(year = 1990:2100) %>% 
-  left_join(r10_rcb19902020 %>% select(r10 = r10label, category, year, gtco2_hist, rcb)) %>% 
-  arrange(model, scen, r10, category, year) %>% 
-  mutate(gtco2 = ifelse(year < 2025, gtco2_hist, gtco2_path)) %>% 
-  group_by(model, scen, category, r10) %>% 
-  mutate(gtco2_interp = zoo::na.approx(gtco2)) %>% 
-  # Remove novel CDR (placeholder until Gaurav provides R10 novel CDR paths)
-  mutate(gtco2_interp_nocdr = ifelse(gtco2_interp < 0, 0, gtco2_interp)) %>% 
-  mutate(gtco2_interp_nocdr_cmltv = cumsum(gtco2_interp_nocdr),
-         rcb_interp = rcb[year == 1990] - lag(gtco2_interp_nocdr_cmltv, default = 0))
+  group_by(Model, Scenario, Region, Category) %>%
+  complete(Year = 1990:2100) %>%
+  filter(!Region  %in% c("World", "R10ROWO")) %>% 
+  list(., r10_rcb19902020 %>% 
+         transmute(Region = r10, Category = category, Year = year, 
+                   "Emissions|CO2|Energy and Industrial Processes|Historical" = gtco2_hist,
+                   "Emissions|CO2|Energy and Industrial Processes|HistoricalRemaining" = rcb)) %>% 
+  reduce(left_join)
 
-# Visualise
 co2ffi_paths_hist %>% 
-  filter(category == "1_PP1990", model == "REMIND 2.1") %>% 
-  ggplot(aes(year, rcb_interp, colour = r10)) +
-  geom_line() +
-  facet_wrap(model~scen)
+  filter(Category == "1_PP1990") %>% 
+  ggplot(aes(x = Year)) +
+  geom_line(aes(y = `Emissions|CO2|Energy and Industrial Processes|Historical`)) +
+  geom_line(aes(y = `Emissions|CO2|Energy and Industrial Processes|Gross`, colour = Scenario)) +
+  facet_wrap(~Region, scales = "free_y", ncol = 5) +
+  labs(x = NULL, y = "GtCO2-FFI", colour = "Scenario", title = "Historical and modelled CO2-FFI paths") +
+  theme_bw() +
+  theme(legend.position = "bottom")
 
-# DETERMINE CARBON DEBT AT GLOBAL NET-ZERO CO2 ---------------------------------
+co2ffi_paths_hist <- co2ffi_paths_hist %>% 
+  group_by(Model, Scenario, Region, Category) %>% 
+  transmute(Year = Year, 
+            `Emissions|CO2|Energy and Industrial Processes|Gross` = 
+              ifelse(is.na(`Emissions|CO2|Energy and Industrial Processes|Gross`), 
+                     `Emissions|CO2|Energy and Industrial Processes|Historical`, 
+                     `Emissions|CO2|Energy and Industrial Processes|Gross`),
+            `Carbon Dioxide Removal|Novel` = ifelse(is.na(`Carbon Dioxide Removal|Novel`), 
+                                                    0, `Carbon Dioxide Removal|Novel`),
+            `Emissions|CO2|Energy and Industrial Processes|HistoricalRemaining` = 
+              `Emissions|CO2|Energy and Industrial Processes|HistoricalRemaining`,
+            `Emissions|CO2|Energy and Industrial Processes|GrossRemaining` = 
+              `Emissions|CO2|Energy and Industrial Processes|HistoricalRemaining`[Year == 1990] -
+              cumsum(lag(`Emissions|CO2|Energy and Industrial Processes|Gross`, default = 0)))
 
-# At present, we determine total carbon debt in year 2100, having removed novel CDR
+# DETERMINE CARBON DEBT IN 2100 ------------------------------------------------
+
 cdebt <- co2ffi_paths_hist %>% 
-  filter(year == 2100) %>% 
-  mutate(debt = ifelse(rcb_interp < 0, -rcb_interp, 0)) %>% 
-  select(model, scen, category, r10, debt) %>% 
-  group_by(model, scen, category) %>% 
-  mutate(debtshare = debt / sum(debt)) %>% 
-  arrange(model, scen, category, r10)
+  mutate(`Emissions|CO2|Energy and Industrial Processes|GrossDebtCmltv` = 
+           ifelse(`Emissions|CO2|Energy and Industrial Processes|GrossRemaining` < 0, 
+                  -`Emissions|CO2|Energy and Industrial Processes|GrossRemaining`, 0),
+         `Emissions|CO2|Energy and Industrial Processes|GrossCmltv` = 
+           cumsum(`Emissions|CO2|Energy and Industrial Processes|Gross`),
+         `Carbon Dioxide Removal|NovelCmltv` =
+           cumsum(`Carbon Dioxide Removal|Novel`)) %>% 
+  filter(Year == 2100) %>% 
+  select(Model, Scenario, Region, Category, `Emissions|CO2|Energy and Industrial Processes|GrossCmltv`, 
+         `Emissions|CO2|Energy and Industrial Processes|GrossDebtCmltv`, `Carbon Dioxide Removal|NovelCmltv`) %>% 
+  group_by(Model, Scenario, Category) %>% 
+  mutate(`Emissions|CO2|Energy and Industrial Processes|GrossCmltvShare` =
+           `Emissions|CO2|Energy and Industrial Processes|GrossCmltv` / 
+           sum(`Emissions|CO2|Energy and Industrial Processes|GrossCmltv`),
+         `Emissions|CO2|Energy and Industrial Processes|GrossDebtShare` = 
+           `Emissions|CO2|Energy and Industrial Processes|GrossDebtCmltv` / 
+           sum(`Emissions|CO2|Energy and Industrial Processes|GrossDebtCmltv`),
+         ) %>% 
+  arrange(Model, Scenario, Category, Region)
 
-# ASSIGN GLOBAL CUMULATIVE NOVEL CDR BY DEBT SHARE -----------------------------
+cdebt %>% 
+  filter(Category == "1_PP1990") %>% 
+  pivot_longer(-c(Model, Scenario, Region, Category)) %>% 
+  ggplot(aes(x = Region, y = value, colour = Scenario)) +
+  geom_point() +
+  facet_wrap(~name, scales = "free_x", ncol = 5, strip.position = "right") +
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  coord_flip() +
+  labs(x = NULL, y = "GtCO2", colour = "Scenario",
+       title = "Comparing cumulative novel CDR, gross emissions, debt and shares")
+
+# ASSIGN GLOBAL CUMULATIVE NOVEL AND PREVENTATIVE NOVEL CDR --------------------
 
 novelcdr_resp <- left_join(cdebt, 
-                           novelcdr_paths %>% 
-                             group_by(model, scen, angle, ensemble_member) %>% 
-                             summarise(gtcdr = sum(gtcdr))) %>% 
-  mutate(gtcdr_resp = debtshare * gtcdr)
+                           p90cdr %>% 
+                             select(-Region) %>% 
+                             group_by(Model, Scenario) %>% 
+                             summarise(`Carbon Dioxide Removal|Novel|WorldCmltv` = sum(`Carbon Dioxide Removal|Novel`),
+                                       `Carbon Dioxide Removal|Novel [p90]|WorldCmltv` = sum(`Carbon Dioxide Removal|Novel [p90]`))) %>% 
+  mutate(`Carbon Dioxide Removal|Novel|FairShare` = `Emissions|CO2|Energy and Industrial Processes|GrossCmltvShare` * `Carbon Dioxide Removal|Novel|WorldCmltv`,
+         `Carbon Dioxide Removal|Novel [p90]|FairShare` = `Emissions|CO2|Energy and Industrial Processes|GrossDebtShare` * `Carbon Dioxide Removal|Novel [p90]|WorldCmltv`)
 
 novelcdr_resp %>% 
-  filter(category == "1_PP1990", model == "REMIND 2.1", gtcdr_resp > 0, angle == min(angle)) %>% 
-  ggplot(aes(gtcdr_resp, fill = r10)) +
-  geom_density() +
-  facet_wrap(model ~ scen, scales = "free")
-
+  filter(Category == "1_PP1990") %>% 
+  select(Model, Scenario, Region, Category, `Carbon Dioxide Removal|NovelCmltv`, `Carbon Dioxide Removal|Novel|FairShare`, `Carbon Dioxide Removal|Novel [p90]|FairShare`) %>% 
+  pivot_longer(-c(Model, Scenario, Region, Category, `Carbon Dioxide Removal|NovelCmltv`)) %>% 
+  ggplot(aes(x = Region)) +
+  geom_col(aes(y = value, fill = name)) +
+  geom_point(aes(y = `Carbon Dioxide Removal|NovelCmltv`, shape = "Carbon Dioxide Removal|NovelCmltv")) +
+  facet_wrap(~Scenario, ncol = 5) +
+  coord_flip() +
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  labs(x = NULL, y = "GtCO2", shape = NULL, fill = NULL,
+       title = "Comparing 'fair' shares of novel CDR, 'fair' shares of preventative CDR, and modeled novel CDR") +
+  guides(fill = guide_legend(reverse = T))
 
 
 
