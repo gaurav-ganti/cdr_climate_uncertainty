@@ -171,6 +171,8 @@ projected_pop %>%
 
 # SET REMAINING CARBON BUDGETS -------------------------------------------------
 
+# Add a note to explain why our RCB in 2020 is a slightly different.
+
 # From 2020 with a temperature target of 1.5C with a likelihood of 50%, using the
 # updated 2023 value (247Gt) from Lamboll et al (2023) https://doi.org/10.1038/s41558-023-01848-5, 
 # and adding CO2-FFI emissions from 2020-2022,

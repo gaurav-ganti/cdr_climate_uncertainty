@@ -167,14 +167,21 @@ cdebt %>%
 
 # ASSIGN GLOBAL CUMULATIVE NOVEL AND PREVENTATIVE NOVEL CDR --------------------
 
-novelcdr_resp <- left_join(cdebt, 
-                           p90cdr %>% 
-                             select(-Region) %>% 
-                             group_by(Model, Scenario) %>% 
-                             summarise(`Carbon Dioxide Removal|Novel|WorldCmltv` = sum(`Carbon Dioxide Removal|Novel`),
-                                       `Carbon Dioxide Removal|Novel [p90]|WorldCmltv` = sum(`Carbon Dioxide Removal|Novel [p90]`))) %>% 
-  mutate(`Carbon Dioxide Removal|Novel|FairShare` = `Emissions|CO2|Energy and Industrial Processes|GrossCmltvShare` * `Carbon Dioxide Removal|Novel|WorldCmltv`,
-         `Carbon Dioxide Removal|Novel [p90]|FairShare` = `Emissions|CO2|Energy and Industrial Processes|GrossDebtShare` * `Carbon Dioxide Removal|Novel [p90]|WorldCmltv`)
+novelcdr_resp <- left_join(
+  cdebt, 
+  p90cdr %>% 
+    select(-Region) %>% 
+    group_by(Model, Scenario) %>% 
+    summarise(`Carbon Dioxide Removal|Novel|WorldCmltv` = 
+                sum(`Carbon Dioxide Removal|Novel`),
+              `Carbon Dioxide Removal|Novel [p90]|Additional|WorldCmltv` = 
+                sum(`Carbon Dioxide Removal|Novel [p90]|Additional`))) %>% 
+  mutate(`Carbon Dioxide Removal|Novel|FairShare` = 
+           `Emissions|CO2|Energy and Industrial Processes|GrossCmltvShare` * 
+           `Carbon Dioxide Removal|Novel|WorldCmltv`,
+         `Carbon Dioxide Removal|Novel [p90]|FairShare` = 
+           `Emissions|CO2|Energy and Industrial Processes|GrossDebtShare` * 
+           `Carbon Dioxide Removal|Novel [p90]|Additional|WorldCmltv`)
 
 novelcdr_resp %>% 
   filter(Category == "1_PP1990") %>% 
@@ -190,6 +197,11 @@ novelcdr_resp %>%
   labs(x = NULL, y = "GtCO2", shape = NULL, fill = NULL,
        title = "Comparing 'fair' shares of novel CDR, 'fair' shares of preventative CDR, and modeled novel CDR") +
   guides(fill = guide_legend(reverse = T))
+
+# Per capita drawdown 2020-2100
+# Volumes of drawdown
+# 1 Figure, 200-300 words
+
 
 
 
