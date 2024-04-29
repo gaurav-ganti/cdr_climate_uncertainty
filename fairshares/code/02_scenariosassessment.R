@@ -51,6 +51,11 @@ r10_rcb19902020 <- read_csv(here("data", "equity_data", "processed", "r10_rcb199
   select(r10, year, category, gtco2_hist = gtco2, rcb) %>% 
   left_join(r10order)
 
+r10_poprem <- read_csv(here("data", "equity_data", "processed", "iso3c_allocdataset.csv")) %>% 
+  group_by(r10) %>%
+  summarise(pop_20202100 = sum(pop_20202100)) %>% 
+  rename(Region = r10)
+
 # SCENARIO DATA ----------------------------------------------------------------
 
 # Read in regional CO2-FFI and Novel CDR emissions paths
@@ -111,7 +116,7 @@ co2ffi_paths_hist %>%
   geom_line(aes(y = `Emissions|CO2|Energy and Industrial Processes|Historical`)) +
   geom_line(aes(y = `Emissions|CO2|Energy and Industrial Processes|Gross`, colour = Scenario)) +
   facet_wrap(~Region, scales = "free_y", ncol = 5) +
-  labs(x = NULL, y = "GtCO2-FFI", colour = "Scenario", title = "Historical and modelled CO2-FFI paths") +
+  labs(x = NULL, y = "GtCO2-FFI", colour = "Scenario", title = "Historical and modelled gross CO2-FFI paths") +
   theme_bw() +
   theme(legend.position = "bottom")
 
@@ -147,7 +152,7 @@ cdebt <- co2ffi_paths_hist %>%
   mutate(`Emissions|CO2|Energy and Industrial Processes|GrossCmltvShare` =
            `Emissions|CO2|Energy and Industrial Processes|GrossCmltv` / 
            sum(`Emissions|CO2|Energy and Industrial Processes|GrossCmltv`),
-         `Emissions|CO2|Energy and Industrial Processes|GrossDebtShare` = 
+         `Emissions|CO2|Energy and Industrial Processes|GrossDebtCmltvShare` = 
            `Emissions|CO2|Energy and Industrial Processes|GrossDebtCmltv` / 
            sum(`Emissions|CO2|Energy and Industrial Processes|GrossDebtCmltv`),
          ) %>% 
@@ -179,13 +184,16 @@ novelcdr_resp <- left_join(
   mutate(`Carbon Dioxide Removal|Novel|FairShare` = 
            `Emissions|CO2|Energy and Industrial Processes|GrossCmltvShare` * 
            `Carbon Dioxide Removal|Novel|WorldCmltv`,
-         `Carbon Dioxide Removal|Novel [p90]|FairShare` = 
-           `Emissions|CO2|Energy and Industrial Processes|GrossDebtShare` * 
-           `Carbon Dioxide Removal|Novel [p90]|Additional|WorldCmltv`)
+         `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare` = 
+           `Emissions|CO2|Energy and Industrial Processes|GrossDebtCmltvShare` * 
+           `Carbon Dioxide Removal|Novel [p90]|Additional|WorldCmltv`) %>% 
+  select(Model, Scenario, Region, Category, matches("Emissions"), matches("Removal"))
 
 novelcdr_resp %>% 
   filter(Category == "1_PP1990") %>% 
-  select(Model, Scenario, Region, Category, `Carbon Dioxide Removal|NovelCmltv`, `Carbon Dioxide Removal|Novel|FairShare`, `Carbon Dioxide Removal|Novel [p90]|FairShare`) %>% 
+  select(Model, Scenario, Region, Category, `Carbon Dioxide Removal|NovelCmltv`, 
+         `Carbon Dioxide Removal|Novel|FairShare`, 
+         `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare`) %>% 
   pivot_longer(-c(Model, Scenario, Region, Category, `Carbon Dioxide Removal|NovelCmltv`)) %>% 
   ggplot(aes(x = Region)) +
   geom_col(aes(y = value, fill = name)) +
@@ -198,7 +206,55 @@ novelcdr_resp %>%
        title = "Comparing 'fair' shares of novel CDR, 'fair' shares of preventative CDR, and modeled novel CDR") +
   guides(fill = guide_legend(reverse = T))
 
-# Per capita drawdown 2020-2100
+# Figure 3 ---------------------------------------------------------------------
+
+# a <- novelcdr_resp %>% 
+#   filter(Category == "1_PP1990") %>% 
+#   left_join(r10_poprem) %>% 
+#   select(Model, Scenario, Region, Category, `Carbon Dioxide Removal|NovelCmltv`, 
+#          `Carbon Dioxide Removal|Novel|FairShare`, 
+#          `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare`) %>%
+#   ggplot(aes(x = Region)) +
+#   geom_errorbar(aes(ymin = `Carbon Dioxide Removal|Novel|FairShare`, 
+#                     ymax = `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare`,
+#                     colour = Scenario), width = 0.5, size = 0.5, 
+#                 position = position_dodge(width = 0.5)) +
+#   geom_point(aes(y = `Carbon Dioxide Removal|NovelCmltv`, 
+#                  shape = "Modelled removals", colour = Scenario),
+#              position = position_dodge(width = 0.5)) +
+#   scale_color_brewer(type = "qual", palette = "Dark2") +
+#   coord_flip() +
+#   theme_bw() +
+#   theme(legend.position = "right") +
+#   labs(x = NULL, y = "Cumulative removals 2020-2100 (GtCO2)", shape = NULL, colour = NULL) +
+#   guides(colour = guide_legend(reverse = T))
+
+b <- novelcdr_resp %>% 
+  filter(Category == "1_PP1990") %>% 
+  left_join(r10_poprem) %>% 
+  mutate(across(c(`Carbon Dioxide Removal|NovelCmltv`,
+                  `Carbon Dioxide Removal|Novel|FairShare`,
+                  `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare`), 
+                ~ . * 1e9 / pop_20202100, .names = "{.col}|PerCapita20202100")) %>% 
+  select(Model, Scenario, Region, Category, `Carbon Dioxide Removal|NovelCmltv|PerCapita20202100`, 
+         `Carbon Dioxide Removal|Novel|FairShare|PerCapita20202100`, 
+         `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare|PerCapita20202100`) %>%
+  ggplot(aes(x = Region)) +
+  geom_errorbar(aes(ymin = `Carbon Dioxide Removal|Novel|FairShare|PerCapita20202100`, 
+                    ymax = `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare|PerCapita20202100`,
+                    colour = Scenario), width = 0.5, size = 0.5, 
+                position = position_dodge(width = 0.5)) +
+  geom_point(aes(y = `Carbon Dioxide Removal|NovelCmltv|PerCapita20202100`, 
+                colour = "CDR in pathway", group = Scenario), 
+             position = position_dodge(width = 0.5), shape = 4) +
+  scale_color_brewer(type = "qual", palette = "Dark2") +
+  coord_flip() +
+  theme_bw() +
+  theme(legend.position = "right") +
+  labs(x = NULL, y = "Average per-capita removal rate 2020-2100 (tCO2/capita/year)", shape = NULL, colour = NULL)
+
+wrap_plots(b) + plot_layout(guide = "collect")
+
 # Volumes of drawdown
 # 1 Figure, 200-300 words
 

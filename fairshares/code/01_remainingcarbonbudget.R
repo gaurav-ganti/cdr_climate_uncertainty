@@ -209,9 +209,15 @@ alloc_dataset <- list(miss_recent_prodco2 %>%  filter(n_total != n_missing),
     projected_pop %>% 
       group_by(iso3c) %>% 
       summarise(pop_18502050 = sum(pop, na.rm = T),
-                pop_19902050 = sum(ifelse(year >= 1990 & year <= 2050, pop, NA_real_), na.rm = T))) %>% 
+                pop_19902050 = sum(ifelse(year >= 1990 & year <= 2050, pop, NA_real_), na.rm = T),
+                pop_20202100 = sum(ifelse(year >= 1990 & year <= 2050, pop, NA_real_), na.rm = T))) %>% 
   ungroup() %>% 
-  left_join(hist_prodco2 %>% select(iso3c, gtco2_18501989))
+  left_join(hist_prodco2 %>% select(r10, iso3c, gtco2_18501989))
+
+# Write to file
+alloc_dataset %>% 
+  arrange(iso3c) %>% 
+  write_csv(here("data", "equity_data", "processed", "iso3c_allocdataset.csv"))
 
 # Loop over years 1990-2020, determining the RCB at each year
 for(curr_year in 1990:2020) {
