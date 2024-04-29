@@ -10,8 +10,8 @@
 library(pacman)
 
 # processing
-p_load(dplyr, tidyr, readr, readxl, writexl, purrr, ggplot2, forcats, stringr, 
-       patchwork)
+p_load(dplyr, tidyr, readr, readxl, writexl, purrr, ggplot2, forcats,
+       stringr, patchwork, geomtextpath)
 
 # misc
 p_load(here, countrycode, zoo)
@@ -229,7 +229,7 @@ novelcdr_resp %>%
 #   labs(x = NULL, y = "Cumulative removals 2020-2100 (GtCO2)", shape = NULL, colour = NULL) +
 #   guides(colour = guide_legend(reverse = T))
 
-b <- novelcdr_resp %>% 
+a <- novelcdr_resp %>% 
   filter(Category == "1_PP1990") %>% 
   left_join(r10_poprem) %>% 
   mutate(across(c(`Carbon Dioxide Removal|NovelCmltv`,
@@ -237,23 +237,55 @@ b <- novelcdr_resp %>%
                   `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare`), 
                 ~ . * 1e9 / pop_20202100, .names = "{.col}|PerCapita20202100")) %>% 
   select(Model, Scenario, Region, Category, `Carbon Dioxide Removal|NovelCmltv|PerCapita20202100`, 
-         `Carbon Dioxide Removal|Novel|FairShare|PerCapita20202100`, 
-         `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare|PerCapita20202100`) %>%
+         "Modelled" = `Carbon Dioxide Removal|Novel|FairShare|PerCapita20202100`, 
+         "Preventative" = `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare|PerCapita20202100`) %>%
   ggplot(aes(x = Region)) +
-  geom_errorbar(aes(ymin = `Carbon Dioxide Removal|Novel|FairShare|PerCapita20202100`, 
-                    ymax = `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare|PerCapita20202100`,
-                    colour = Scenario), width = 0.5, size = 0.5, 
-                position = position_dodge(width = 0.5)) +
-  geom_point(aes(y = `Carbon Dioxide Removal|NovelCmltv|PerCapita20202100`, 
-                colour = "CDR in pathway", group = Scenario), 
-             position = position_dodge(width = 0.5), shape = 4) +
-  scale_color_brewer(type = "qual", palette = "Dark2") +
+  geom_col(aes(y = `Carbon Dioxide Removal|NovelCmltv|PerCapita20202100`, fill = Scenario),
+           position = position_dodge(width = 0.6), width = 0.6, alpha = 0.6) +
+  geom_segment(aes(y = Modelled, yend = Modelled + Preventative, colour = Scenario), 
+             position = position_dodge(width = 0.6), show.legend = F, alpha = 0.1) +
+  geom_point(aes(y = Modelled, colour = Scenario, shape = "Scenario"),
+             position = position_dodge(width = 0.6), alpha = 2) +
+  geom_point(aes(y = Modelled + Preventative, colour = Scenario, shape = "Scenario + Preventative"),
+             position = position_dodge(width = 0.6), alpha = 2) +
+  scale_colour_brewer(type = "qual", palette = "Dark2", direction = -1) +
+  scale_fill_brewer(type = "qual", palette = "Dark2", direction = -1) +
+  scale_shape_manual(values = c(4, 20)) +
   coord_flip() +
   theme_bw() +
-  theme(legend.position = "right") +
-  labs(x = NULL, y = "Average per-capita removal rate 2020-2100 (tCO2/capita/year)", shape = NULL, colour = NULL)
+  theme(legend.position = "right", panel.grid = element_blank()) +
+  labs(x = NULL, y = "Average per-capita CDR 2020-2100 (tCO2/capita/year)", 
+       shape = "'Fair' novel CDR shares", fill = "Scenario") +
+  guides(colour = "none",
+         fill = guide_legend(reverse = T))
 
-wrap_plots(b) + plot_layout(guide = "collect")
+b <- novelcdr_resp %>% 
+  filter(Category == "1_PP1990") %>% 
+  left_join(r10_poprem) %>% 
+  mutate(difference = `Carbon Dioxide Removal|NovelCmltv` - 
+           (`Carbon Dioxide Removal|Novel|FairShare` + `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare`)) %>% 
+  group_by(Category, Scenario) %>% 
+  mutate(preventativegap = sum(difference)) %>% 
+  ggplot(aes(x = Scenario)) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey") +
+  geom_col(aes(y = -difference, fill = Scenario),
+           width = 0.4, alpha = 0.6) +
+  geom_textsegment(aes(y = 0, yend = -preventativegap, label = "Absolute gap", xend = Scenario),
+                   data = . %>% distinct(Model, Scenario, Category, preventativegap),
+                   arrow = arrow(type = "closed", length = unit(0.1, "cm")), size = 2.5, alpha = 0.7) +
+  scale_fill_brewer(type = "qual", palette = "Dark2", direction = -1) +
+  labs(fill = "Scenario", y = "Cumulative preventative CDR gap (GtCO2e)",
+       x = NULL) +
+  coord_flip() +
+  theme_bw() +
+  theme(legend.position = "right", panel.grid = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank()) +
+  guides(fill = guide_legend(reverse = T))
+
+wrap_plots(a,b) + plot_layout(guides = "collect")
+
+ggsave(here("figure", "figure3.png"), width = 12, height = 5, dpi = 300)
 
 # Volumes of drawdown
 # 1 Figure, 200-300 words
