@@ -287,6 +287,10 @@ wrap_plots(a,b) + plot_layout(guides = "collect")
 
 ggsave(here("figure", "figure3.png"), width = 12, height = 5, dpi = 300)
 
+# Write data to file
+a$data %>% write_csv(here("figure", "figure3a.csv"))
+b$data %>% write_csv(here("figure", "figure3b.csv"))
+
 # Volumes of drawdown
 # 1 Figure, 200-300 words
 
