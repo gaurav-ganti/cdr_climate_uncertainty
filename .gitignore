@@ -168,3 +168,7 @@ notebooks/papermill_output/*.ipynb
 notebooks/logging/*.log
 .Rproj.user
 fairshares/.Rhistory
+.DS_Store
+
+.Rproj.user
+fairshares/.Rhistory

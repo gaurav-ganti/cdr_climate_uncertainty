@@ -22,15 +22,14 @@ options(scipen = 999)
 # COUNTRY NAMES AND REGIONAL GROUPING ------------------------------------------
 
 # Determine country-years for analysis
-iso3c_tbl <- read_csv(here("Data", "countrygroups", "iso3c_region_mapping.csv")) %>% 
-  select(country.name, iso3c, r10 = iamc_r10) %>% 
-  group_by(country.name, iso3c, r10) %>% 
-  expand(year = 1850:2050) %>% 
+iso3c_tbl <- read_csv(here("Data", "countrygroups", "region_mapping_REMIND.csv")) %>% 
+  select(iso3c = ISO, r10 = R10_REMIND_2.1.REGION) %>% 
+  group_by(iso3c, r10) %>% 
+  expand(year = 1850:2100) %>% 
   ungroup()
 
 # Set consistent r10 ordering
-r10order <- tibble(r10 = c("NAM", "EUR", "PAO", "FSU", "MEA", "EAS", "LAM", "PAS", "AFR", "SAS"),
-                   r10label = c("R10NORTH_AM", "R10EUROPE", "R10PAC_OECD", "R10REF_ECON", "R10MIDDLE_EAST", "R10CHINA+", "R10LATIN_AM", "R10REST_ASIA", "R10AFRICA", "R10INDIA+"),
+r10order <- tibble(r10 = c("R10NORTH_AM", "R10EUROPE", "R10PAC_OECD", "R10REF_ECON", "R10MIDDLE_EAST", "R10CHINA+", "R10LATIN_AM", "R10REST_ASIA", "R10AFRICA", "R10INDIA+"),
                    r10labellong = c("North America", "Europe", "Asia-Pacific Developed",
                                "Eastern Europe and West-Central Asia", "Middle East", "Eastern Asia",
                                "Latin America and Caribbean", "South-East Asia and developing Pacific",
@@ -38,8 +37,8 @@ r10order <- tibble(r10 = c("NAM", "EUR", "PAO", "FSU", "MEA", "EAS", "LAM", "PAS
 
 # Adjust labels to reflect those for publication
 iso3c_tbl <- iso3c_tbl %>% 
-  left_join(r10order) %>% 
-  select(country.name, iso3c, r10, r10label, r10labellong, year)
+  full_join(r10order) %>% 
+  select(iso3c, r10, r10labellong, year)
 
 # HISTORICAL CUMULATIVE EMISSIONS GCP (1850-1989) ------------------------------
 
@@ -55,7 +54,7 @@ hist_prodco2 <- read_csv(here("data", "equity_data",
 
 # Check which iso3c are missing in GCB emissions data
 miss_hist_prodco2 <- hist_prodco2 %>% 
-  group_by(iso3c, country.name) %>% 
+  group_by(iso3c) %>% 
   summarise(n_total = n(),
             n_missing = sum(is.na(CO2)))
 
@@ -66,9 +65,9 @@ hist_prodco2 <- hist_prodco2 %>%
   group_by(iso3c) %>% 
   summarise(gtco2_18501989 = 
               sum(ifelse(year >= 1850 & year <= 1989, CO2, NA_real_), na.rm = T)) %>% 
-  left_join(iso3c_tbl %>% distinct(iso3c, r10, country.name)) %>% 
+  left_join(iso3c_tbl %>% distinct(iso3c, r10)) %>% 
   ungroup() %>% 
-  select(country.name, iso3c, r10,  gtco2_18501989)
+  select(iso3c, r10,  gtco2_18501989)
 
 # RECENT CUMULATIVE EMISSIONS (GCP) (1990-2022) --------------------------------
 
@@ -84,7 +83,7 @@ recent_prodco2 <- read_csv(here("data", "equity_data",
 
 # Check which iso3c are missing in GCB emissions data in each year
 miss_recent_prodco2 <- recent_prodco2 %>% 
-  group_by(iso3c, country.name) %>% 
+  group_by(iso3c) %>% 
   summarise(n_total = n(),
             n_missing = sum(is.na(gtco2)))
 
@@ -92,11 +91,11 @@ miss_recent_prodco2 <- recent_prodco2 %>%
 recent_prodco2 <- recent_prodco2 %>% 
   filter(!iso3c %in% 
            (miss_recent_prodco2 %>% filter(n_total == n_missing) %>% pull(iso3c))) %>% 
-  select(iso3c, country.name, year, gtco2) %>% 
-  group_by(iso3c, country.name) %>% 
+  select(iso3c, year, gtco2) %>% 
+  group_by(iso3c) %>% 
   mutate(gtco2_cmltv = cumsum(gtco2))  %>% 
   left_join(iso3c_tbl %>% filter(year >= 1990, year <= 2022), 
-             by = c("iso3c", "year", "country.name")) %>% 
+             by = c("iso3c", "year")) %>% 
   ungroup()
 
 # HISTORICAL (OWID) AND PROJECTED POPULATION (IIASA WIC SSP2) ------------------
@@ -134,11 +133,11 @@ projected_pop <- projected_pop %>%
   
 # Create full dataset, making missing iso3c explicit
 projected_pop <- projected_pop %>% 
-  full_join(iso3c_tbl %>% distinct(iso3c, country.name, r10), by = c("iso3c"))
+  full_join(iso3c_tbl %>% distinct(iso3c, r10), by = c("iso3c"))
 
 # Determine missing countries
 miss_projected_pop <- projected_pop %>% 
-  group_by(iso3c, country.name) %>% 
+  group_by(iso3c) %>% 
   summarise(n_total = n(),
             n_missing = sum(is.na(pop)))
 
@@ -171,6 +170,8 @@ projected_pop %>%
   write_csv(here("data", "equity_data", "processed", "iso3c_popssp218502100.csv"))
 
 # SET REMAINING CARBON BUDGETS -------------------------------------------------
+
+# Add a note to explain why our RCB in 2020 is a slightly different.
 
 # From 2020 with a temperature target of 1.5C with a likelihood of 50%, using the
 # updated 2023 value (247Gt) from Lamboll et al (2023) https://doi.org/10.1038/s41558-023-01848-5, 
@@ -208,9 +209,15 @@ alloc_dataset <- list(miss_recent_prodco2 %>%  filter(n_total != n_missing),
     projected_pop %>% 
       group_by(iso3c) %>% 
       summarise(pop_18502050 = sum(pop, na.rm = T),
-                pop_19902050 = sum(ifelse(year >= 1990 & year <= 2050, pop, NA_real_), na.rm = T))) %>% 
+                pop_19902050 = sum(ifelse(year >= 1990 & year <= 2050, pop, NA_real_), na.rm = T),
+                pop_20202100 = sum(ifelse(year >= 1990 & year <= 2050, pop, NA_real_), na.rm = T))) %>% 
   ungroup() %>% 
-  left_join(hist_prodco2 %>% select(iso3c, gtco2_18501989))
+  left_join(hist_prodco2 %>% select(r10, iso3c, gtco2_18501989))
+
+# Write to file
+alloc_dataset %>% 
+  arrange(iso3c) %>% 
+  write_csv(here("data", "equity_data", "processed", "iso3c_allocdataset.csv"))
 
 # Loop over years 1990-2020, determining the RCB at each year
 for(curr_year in 1990:2020) {
