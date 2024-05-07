@@ -17,6 +17,7 @@ dependencies:
   - scmdata>=0.11
   - scikit-learn
   - tqdm
+  - statsmodels
   - pyam>=2.0
   - pip:
       - climate-assessment
@@ -25,3 +26,4 @@ dependencies:
       - openscm-zenodo
       - papermill
       - pyrcmip
+      - binsreg
