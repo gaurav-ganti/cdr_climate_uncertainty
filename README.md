@@ -1,7 +1,7 @@
 # Fair CDR obligations under climate uncertainty
 
 This repository accompanies the paper:
-> Ganti, G., Pelz, S., Klönne, U., Gidden, M.J., Schleussner, C.-F.S., Nicholls, Z., Fair carbon removal obligations under climate uncertainty. DOI:
+> [Anonymised] Fair carbon removal obligations under climate uncertainty. DOI:
 
 ## Data and citations
 
