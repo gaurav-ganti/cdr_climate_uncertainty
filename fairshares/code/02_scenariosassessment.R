@@ -181,18 +181,34 @@ novelcdr_resp <- left_join(
                 sum(`Carbon Dioxide Removal|Novel`),
               `Carbon Dioxide Removal|Novel [p90]|Additional|WorldCmltv` = 
                 sum(`Carbon Dioxide Removal|Novel [p90]|Additional`))) %>% 
-  mutate(`Carbon Dioxide Removal|Novel|FairShare` = 
+  mutate(`Carbon Dioxide Removal|Novel|FairShare|Resp` = 
            `Emissions|CO2|Energy and Industrial Processes|GrossCmltvShare` * 
+           `Carbon Dioxide Removal|Novel|WorldCmltv`,
+         `Carbon Dioxide Removal|Novel|FairShare|Debt` = 
+           `Emissions|CO2|Energy and Industrial Processes|GrossDebtCmltvShare` * 
            `Carbon Dioxide Removal|Novel|WorldCmltv`,
          `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare` = 
            `Emissions|CO2|Energy and Industrial Processes|GrossDebtCmltvShare` * 
            `Carbon Dioxide Removal|Novel [p90]|Additional|WorldCmltv`) %>% 
   select(Model, Scenario, Region, Category, matches("Emissions"), matches("Removal"))
 
+cdebt %>% 
+  filter(Category == "1_PP1990") %>% 
+  ggplot(aes(x = `Emissions|CO2|Energy and Industrial Processes|GrossDebtCmltvShare`, 
+             y = `Emissions|CO2|Energy and Industrial Processes|GrossCmltvShare`,
+             colour = Region, shape = Scenario)) +
+  geom_abline() +
+  geom_point(size = 3, alpha = 0.7) +
+  coord_cartesian(xlim = c(0, 0.4), ylim = c(0, 0.4)) +
+  theme_classic()
+
+ggsave(here("figure", "figure3_si.png"), width = 7, height = 5, dpi = 300)
+
 novelcdr_resp %>% 
   filter(Category == "1_PP1990") %>% 
   select(Model, Scenario, Region, Category, `Carbon Dioxide Removal|NovelCmltv`, 
-         `Carbon Dioxide Removal|Novel|FairShare`, 
+         `Carbon Dioxide Removal|Novel|FairShare|Resp`, 
+         `Carbon Dioxide Removal|Novel|FairShare|Debt`, 
          `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare`) %>% 
   pivot_longer(-c(Model, Scenario, Region, Category, `Carbon Dioxide Removal|NovelCmltv`)) %>% 
   ggplot(aes(x = Region)) +
@@ -206,38 +222,17 @@ novelcdr_resp %>%
        title = "Comparing 'fair' shares of novel CDR, 'fair' shares of preventative CDR, and modeled novel CDR") +
   guides(fill = guide_legend(reverse = T))
 
-# Figure 3 ---------------------------------------------------------------------
-
-# a <- novelcdr_resp %>% 
-#   filter(Category == "1_PP1990") %>% 
-#   left_join(r10_poprem) %>% 
-#   select(Model, Scenario, Region, Category, `Carbon Dioxide Removal|NovelCmltv`, 
-#          `Carbon Dioxide Removal|Novel|FairShare`, 
-#          `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare`) %>%
-#   ggplot(aes(x = Region)) +
-#   geom_errorbar(aes(ymin = `Carbon Dioxide Removal|Novel|FairShare`, 
-#                     ymax = `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare`,
-#                     colour = Scenario), width = 0.5, size = 0.5, 
-#                 position = position_dodge(width = 0.5)) +
-#   geom_point(aes(y = `Carbon Dioxide Removal|NovelCmltv`, 
-#                  shape = "Modelled removals", colour = Scenario),
-#              position = position_dodge(width = 0.5)) +
-#   scale_color_brewer(type = "qual", palette = "Dark2") +
-#   coord_flip() +
-#   theme_bw() +
-#   theme(legend.position = "right") +
-#   labs(x = NULL, y = "Cumulative removals 2020-2100 (GtCO2)", shape = NULL, colour = NULL) +
-#   guides(colour = guide_legend(reverse = T))
+# Figure 3 (using proportional gross emissions allocation of novel CDR) --------
 
 a <- novelcdr_resp %>% 
   filter(Category == "1_PP1990") %>% 
   left_join(r10_poprem) %>% 
   mutate(across(c(`Carbon Dioxide Removal|NovelCmltv`,
-                  `Carbon Dioxide Removal|Novel|FairShare`,
+                  `Carbon Dioxide Removal|Novel|FairShare|Resp`,
                   `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare`), 
                 ~ . * 1e9 / pop_20202100, .names = "{.col}|PerCapita20202100")) %>% 
   select(Model, Scenario, Region, Category, `Carbon Dioxide Removal|NovelCmltv|PerCapita20202100`, 
-         "Modelled" = `Carbon Dioxide Removal|Novel|FairShare|PerCapita20202100`, 
+         "Modelled" = `Carbon Dioxide Removal|Novel|FairShare|Resp|PerCapita20202100`, 
          "Preventative" = `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare|PerCapita20202100`) %>%
   ggplot(aes(x = Region)) +
   geom_col(aes(y = `Carbon Dioxide Removal|NovelCmltv|PerCapita20202100`, fill = Scenario),
@@ -263,7 +258,7 @@ b <- novelcdr_resp %>%
   filter(Category == "1_PP1990") %>% 
   left_join(r10_poprem) %>% 
   mutate(difference = `Carbon Dioxide Removal|NovelCmltv` - 
-           (`Carbon Dioxide Removal|Novel|FairShare` + `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare`)) %>% 
+           (`Carbon Dioxide Removal|Novel|FairShare|Resp` + `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare`)) %>% 
   group_by(Category, Scenario) %>% 
   mutate(preventativegap = sum(difference)) %>% 
   ggplot(aes(x = Scenario)) +
@@ -285,16 +280,72 @@ b <- novelcdr_resp %>%
 
 wrap_plots(a,b) + plot_layout(guides = "collect")
 
-ggsave(here("figure", "figure3.png"), width = 12, height = 5, dpi = 300)
+ggsave(here("figure", "figure3_novelresp.png"), width = 12, height = 5, dpi = 300)
 
 # Write data to file
-a$data %>% write_csv(here("figure", "figure3a.csv"))
-b$data %>% write_csv(here("figure", "figure3b.csv"))
+a$data %>% write_csv(here("figure", "figure3a_novelresp.csv"))
+b$data %>% write_csv(here("figure", "figure3b_novelresp.csv"))
 
-# Volumes of drawdown
-# 1 Figure, 200-300 words
+# Figure 3 (using proportional gross debt allocation of novel CDR) -------------
 
+a <- novelcdr_resp %>% 
+  filter(Category == "1_PP1990") %>% 
+  left_join(r10_poprem) %>% 
+  mutate(across(c(`Carbon Dioxide Removal|NovelCmltv`,
+                  `Carbon Dioxide Removal|Novel|FairShare|Debt`,
+                  `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare`), 
+                ~ . * 1e9 / pop_20202100, .names = "{.col}|PerCapita20202100")) %>% 
+  select(Model, Scenario, Region, Category, `Carbon Dioxide Removal|NovelCmltv|PerCapita20202100`, 
+         "Modelled" = `Carbon Dioxide Removal|Novel|FairShare|Debt|PerCapita20202100`, 
+         "Preventative" = `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare|PerCapita20202100`) %>%
+  ggplot(aes(x = Region)) +
+  geom_col(aes(y = `Carbon Dioxide Removal|NovelCmltv|PerCapita20202100`, fill = Scenario),
+           position = position_dodge(width = 0.6), width = 0.6, alpha = 0.6) +
+  geom_segment(aes(y = Modelled, yend = Modelled + Preventative, colour = Scenario), 
+               position = position_dodge(width = 0.6), show.legend = F, alpha = 0.1) +
+  geom_point(aes(y = Modelled, colour = Scenario, shape = "Scenario"),
+             position = position_dodge(width = 0.6), alpha = 2) +
+  geom_point(aes(y = Modelled + Preventative, colour = Scenario, shape = "Scenario + Preventative"),
+             position = position_dodge(width = 0.6), alpha = 2) +
+  scale_colour_brewer(type = "qual", palette = "Dark2", direction = -1) +
+  scale_fill_brewer(type = "qual", palette = "Dark2", direction = -1) +
+  scale_shape_manual(values = c(4, 20)) +
+  coord_flip() +
+  theme_bw() +
+  theme(legend.position = "right", panel.grid = element_blank()) +
+  labs(x = NULL, y = "Average per-capita CDR 2020-2100 (tCO2/capita/year)", 
+       shape = "'Fair' novel CDR shares", fill = "Scenario") +
+  guides(colour = "none",
+         fill = guide_legend(reverse = T))
 
+b <- novelcdr_resp %>% 
+  filter(Category == "1_PP1990") %>% 
+  left_join(r10_poprem) %>% 
+  mutate(difference = `Carbon Dioxide Removal|NovelCmltv` - 
+           (`Carbon Dioxide Removal|Novel|FairShare|Debt` + `Carbon Dioxide Removal|Novel [p90]|Additional|FairShare`)) %>% 
+  group_by(Category, Scenario) %>% 
+  mutate(preventativegap = sum(difference)) %>% 
+  ggplot(aes(x = Scenario)) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey") +
+  geom_col(aes(y = -difference, fill = Scenario),
+           width = 0.4, alpha = 0.6) +
+  geom_textsegment(aes(y = 0, yend = -preventativegap, label = "Absolute gap", xend = Scenario),
+                   data = . %>% distinct(Model, Scenario, Category, preventativegap),
+                   arrow = arrow(type = "closed", length = unit(0.1, "cm")), size = 2.5, alpha = 0.7) +
+  scale_fill_brewer(type = "qual", palette = "Dark2", direction = -1) +
+  labs(fill = "Scenario", y = "Cumulative preventative CDR gap (GtCO2e)",
+       x = NULL) +
+  coord_flip() +
+  theme_bw() +
+  theme(legend.position = "right", panel.grid = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank()) +
+  guides(fill = guide_legend(reverse = T))
 
+wrap_plots(a,b) + plot_layout(guides = "collect")
 
+ggsave(here("figure", "figure3_noveldebt.png"), width = 12, height = 5, dpi = 300)
 
+# Write data to file
+a$data %>% write_csv(here("figure", "figure3a_noveldebt.csv"))
+b$data %>% write_csv(here("figure", "figure3b_noveldebt.csv"))
